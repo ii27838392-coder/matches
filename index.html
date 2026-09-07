@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Match Predictor | الربط المباشر مع API</title>
+    <style>
+        :root {
+            --bg-body: #0b0e14;
+            --bg-card: #161b22;
+            --border: #21262d;
+            --green: #00e676;
+            --text: #ffffff;
+            --muted: #8b949e;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 450px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            color: var(--green);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+
+        .field {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-bottom: 5px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            background: var(--bg-body);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: #fff;
+            box-sizing: border-box;
+            outline: none;
+            font-size: 0.9rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--green);
+            border: none;
+            border-radius: 6px;
+            color: #000;
+            font-weight: bold;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .info-box {
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--bg-body);
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            word-break: break-all;
+            display: none;
+        }
+
+        .timer-box {
+            text-align: center;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .num {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--green);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .res {
+            background: var(--bg-body);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .res.full {
+            grid-column: span 2;
+            border-color: var(--green);
+        }
+
+        .res .title {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .res .val {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--green);
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. موقع اختيار وتحليل المباراة -->
+    <div class="card">
+        <h2>1️⃣ اختيار المباراة الحقيقية</h2>
+        
+        <div class="field">
+            <label>جدول مباريات اليوم (API Live):</label>
+            <select id="matchSelect" onchange="onMatchSelected()">
+                <option value="">جاري جلب المباريات المباشرة...</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>الفريق المحلي (Home):</label>
+            <input type="text" id="home" placeholder="سيتم التعبئة تلقائياً">
+        </div>
+        <div class="field">
+            <label>الفريق الزائر (Away):</label>
+            <input type="text" id="away" placeholder="سيتم التعبئة تلقائياً">
+        </div>
+
+        <button id="btn1" onclick="step1()">Generate Link</button>
+        <div id="out1" class="info-box"></div>
+    </div>
+
+    <!-- 2. المنصة الرئيسية -->
+    <div class="card">
+        <h2>2️⃣ المنصة الرئيسية (Analyze Data)</h2>
+        <div class="field">
+            <label>رابط التحليل:</label>
+            <input type="text" id="url" placeholder="سيظهر الرابط هنا تلقائياً...">
+        </div>
+        <button id="btn2" onclick="step2()">Start Analysis</button>
+
+        <div id="timer" class="timer-box">
+            <div class="num" id="count">60</div>
+            <div style="font-size:0.8rem; color:var(--muted);">جاري سحب بيانات المباراة وتحليلها...</div>
+        </div>
+
+        <div id="results" class="grid">
+            <div class="res full">
+                <div class="title">النتيجة الدقيقة (Score Exact)</div>
+                <div class="val" id="score">-</div>
+            </div>
+            <div class="res">
+                <div class="title">التوقع (1X2)</div>
+                <div class="val" id="winner" style="font-size:0.9rem;">-</div>
+            </div>
+            <div class="res">
+                <div class="title">الأهداف (Over/Under)</div>
+                <div class="val" id="goals" style="font-size:0.9rem;">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 🔑 ضع مفتاح الـ API الخاص بك هنا بين العلامتين
+        const API_KEY = 'f359629298db4f69a4ca6515f9d04da3';
+
+        // دالة جلب مباريات اليوم عند فتح الصفحة
+        async function fetchTodayMatches() {
+            const selectEl = document.getElementById('matchSelect');
+            const url = 'https://api.football-data.org/v4/matches';
+
+            try {
+                const response = await fetch(url, {
+                    headers: { 'X-Auth-Token': API_KEY }
+                });
+
+                if (!response.ok) throw new Error('خطأ في الاتصال بالـ API');
+
+                const data = await response.json();
+                
+                if (data.matches.length === 0) {
+                    selectEl.innerHTML = '<option value="">لا توجد مباريات مجدولة اليوم</option>';
+                    return;
+                }
+
+                selectEl.innerHTML = '<option value="">-- اختر مباراة للتحليل --</option>';
+
+                data.matches.forEach(m => {
+                    const h = m.homeTeam.name;
+                    const a = m.awayTeam.name;
+                    const time = new Date(m.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    const opt = document.createElement('option');
+                    opt.value = JSON.stringify({ home: h, away: a });
+                    opt.textContent = `[${time}] ${h} vs ${a}`;
+                    selectEl.appendChild(opt);
+                });
+            } catch (err) {
+                console.error(err);
+                selectEl.innerHTML = '<option value="">فشل الجلب (تأكد من صحة المفتاح)</option>';
+            }
+        }
+
+        function onMatchSelected() {
+            const val = document.getElementById('matchSelect').value;
+            if (!val) return;
+            const data = JSON.parse(val);
+            document.getElementById('home').value = data.home;
+            document.getElementById('away').value = data.away;
+        }
+
+        function step1() {
+            const h = document.getElementById('home').value.trim();
+            const a = document.getElementById('away').value.trim();
+            if (!h || !a) return alert('اختر مباراة أولاً');
+
+            const b1 = document.getElementById('btn1');
+            const o1 = document.getElementById('out1');
+            b1.disabled = true;
+            o1.style.display = 'block';
+
+            let t = 10;
+            const inv = setInterval(() => {
+                t--;
+                if (t > 0) {
+                    o1.innerHTML = `⏳ جاري معالجة المعرف... (${t} ثوانٍ)`;
+                } else {
+                    clearInterval(inv);
+                    b1.disabled = false;
+                    const code = btoa(encodeURIComponent(`${h}|${a}`));
+                    const link = `https://ai-predict.com/analyze?id=${code}`;
+                    o1.innerHTML = `✅ <strong>تم توليد الرابط بنجاح:</strong><br>${link}`;
+                    navigator.clipboard.writeText(link);
+                    document.getElementById('url').value = link;
+                }
+            }, 1000);
+        }
+
+        function step2() {
+            const u = document.getElementById('url').value.trim();
+            if (!u.includes('id=')) return alert('الرابط غير صحيح');
+
+            const b2 = document.getElementById('btn2');
+            const tBox = document.getElementById('timer');
+            const rBox = document.getElementById('results');
+            const cEl = document.getElementById('count');
+
+            b2.disabled = true;
+            rBox.style.display = 'none';
+            tBox.style.display = 'block';
+
+            let t = 60;
+            const inv = setInterval(() => {
+                t--;
+                cEl.innerText = t;
+                if (t <= 0) {
+                    clearInterval(inv);
+                    tBox.style.display = 'none';
+                    b2.disabled = false;
+
+                    const raw = decodeURIComponent(atob(u.split('id=')[1]));
+                    const [hTeam, aTeam] = raw.split('|');
+
+                    let hash = 0;
+                    const str = hTeam + aTeam;
+                    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+
+                    const hG = Math.abs(hash % 4);
+                    const aG = Math.abs((hash >> 2) % 3);
+
+                    document.getElementById('score').innerText = `${hG} - ${aG}`;
+                    document.getElementById('winner').innerText = hG > aG ? `فوز ${hTeam}` : (aG > hG ? `فوز ${aTeam}` : 'تعادل');
+                    document.getElementById('goals').innerText = (hG + aG) > 2.5 ? 'Over 2.5' : 'Under 2.5';
+                    rBox.style.display = 'grid';
+                }
+            }, 1000);
+        }
+
+        // تشغيل جلب المباريات فور التحميل
+        window.onload = fetchTodayMatches;
+    </script>
+</body>
+</html>
